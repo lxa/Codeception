@@ -148,44 +148,14 @@ class Configuration
             throw new ConfigurationException("Configuration file could not be found.\nRun bootstrap to initialize Codeception.", 404);
         }
 
-        $tempConfig = self::$defaultConfig;
-        $distConfigContents = '';
-        if (file_exists($configDistFile)) {
-            $distConfigContents = file_get_contents($configDistFile);
-            if ($distConfigContents === false) {
-                throw new ConfigurationException("Failed to read {$configDistFile}");
-            }
-            $tempConfig = self::mergeConfigs($tempConfig, self::getConfFromContents($distConfigContents, $configDistFile));
-        }
-
-        $configContents = '';
-        if (file_exists($configFile)) {
-            $configContents = file_get_contents($configFile);
-            if ($configContents === false) {
-                throw new ConfigurationException("Failed to read {$configFile}");
-            }
-            $tempConfig = self::mergeConfigs($tempConfig, self::getConfFromContents($configContents, $configFile));
-        }
-
+        $tempConfig = self::loadMergedConfig($configDistFile, $configFile);
         self::prepareParams($tempConfig);
 
-        $config = self::$defaultConfig;
-        if ($distConfigContents !== '') {
-            $config = self::mergeConfigs($config, self::getConfFromContents($distConfigContents, $configDistFile));
-        }
-        if ($configContents !== '') {
-            $config = self::mergeConfigs($config, self::getConfFromContents($configContents, $configFile));
-        }
-
-        if ($config === self::$defaultConfig) {
-            throw new ConfigurationException("Configuration file is invalid");
-        }
+        $config = self::loadMergedConfig($configDistFile, $configFile);
 
         if (isset($config['extends'])) {
-            $presetFilePath = codecept_absolute_path($config['extends']);
-            if (file_exists($presetFilePath)) {
-                $config = self::mergeConfigs(self::getConfFromFile($presetFilePath), $config);
-            }
+            $presetConfig = self::getConfFromFile(codecept_absolute_path($config['extends']));
+            $config = self::mergeConfigs($presetConfig, $config);
         }
 
         self::$config = $config;
@@ -649,5 +619,32 @@ class Configuration
         foreach ($settings['params'] as $paramStorage) {
             self::$params = array_merge(self::$params, ParamsLoader::load($paramStorage));
         }
+    }
+
+    /**
+     * @param string $distConfigFile
+     * @param string $configFile
+     * @return array
+     * @throws ConfigurationException
+     */
+    private static function loadMergedConfig(string $distConfigFile, string $configFile): array
+    {
+        $config = self::mergeConfigs(
+            self::getConfFromFile($distConfigFile),
+            self::getConfFromFile($configFile)
+        );
+
+        if (isset($config['extends'])) {
+            $presetFilePath = codecept_absolute_path($config['extends']);
+            $config = self::mergeConfigs(self::getConfFromFile($presetFilePath), $config);
+        }
+
+        $config = self::mergeConfigs(self::$defaultConfig, $config);
+
+        if ($config === self::$defaultConfig) {
+            throw new ConfigurationException("Configuration file is invalid");
+        }
+
+        return $config;
     }
 }
